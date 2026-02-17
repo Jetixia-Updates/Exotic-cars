@@ -56,6 +56,15 @@ carsRouter.get("/", async (req, res) => {
   res.json({ cars, total, page: Number(page), limit: Number(limit) });
 });
 
+carsRouter.get("/my", authenticate, async (req: AuthRequest, res) => {
+  const cars = await prisma.carListing.findMany({
+    where: { sellerId: req.user!.userId },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, title: true, brand: true, model: true, year: true, listingType: true },
+  });
+  res.json({ cars });
+});
+
 carsRouter.get("/featured", async (req, res) => {
   const cars = await prisma.carListing.findMany({
     where: { isFeatured: true, status: "active" },

@@ -21,6 +21,9 @@ const loginSchema = z.object({
 
 authRouter.post("/register", async (req, res) => {
   try {
+    if (!req.body || typeof req.body !== "object") {
+      return res.status(400).json({ error: "Request body must be JSON with email, password, name" });
+    }
     const body = registerSchema.parse(req.body);
     const existing = await prisma.user.findUnique({
       where: { email: body.email },
@@ -29,47 +32,67 @@ authRouter.post("/register", async (req, res) => {
       return res.status(400).json({ error: "Email already registered" });
     }
     const passwordHash = await bcrypt.hash(body.password, 12);
-    const user = await prisma.user.create({
-      data: {
-        email: body.email,
-        passwordHash,
-        name: body.name,
-        role: body.role || "BUYER",
-      },
-      select: { id: true, email: true, name: true, role: true, avatar: true },
+    const role = (body.role === "SELLER" || body.role === "WORKSHOP" ? body.role : "BUYER") as "BUYER" | "SELLER" | "WORKSHOP";
+
+    const result = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          email: body.email,
+          passwordHash,
+          name: body.name,
+          role,
+        },
+        select: { id: true, email: true, name: true, role: true, avatar: true },
+      });
+      const refreshTokenValue = generateRefreshToken(user.id);
+      await tx.refreshToken.create({
+        data: {
+          token: refreshTokenValue,
+          userId: user.id,
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        },
+      });
+      await tx.userProfile.create({
+        data: { userId: user.id },
+      });
+      return { user, refreshTokenValue };
     });
-    const accessToken = generateAccessToken(user);
-    const refreshToken = generateRefreshToken(user.id);
-    await prisma.refreshToken.create({
-      data: {
-        token: refreshToken,
-        userId: user.id,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      },
-    });
-    await prisma.userProfile.create({
-      data: { userId: user.id },
-    });
-    res.json({ user, accessToken, refreshToken, expiresIn: 900 });
-  } catch (e) {
+
+    const accessToken = generateAccessToken(result.user);
+    return res.json({ user: result.user, accessToken, refreshToken: result.refreshTokenValue, expiresIn: 900 });
+  } catch (e: unknown) {
     if (e instanceof z.ZodError) {
       return res.status(400).json({ error: e.errors });
     }
-    throw e;
+    console.error("[auth/register]", e);
+    const raw =
+      e instanceof Error ? e.message : e && typeof e === "object" && "message" in e ? String((e as { message: unknown }).message) : String(e);
+    const isDbError = /P1001|P1017|P2002|connect|database|ECONNREFUSED|unique constraint/i.test(raw);
+    const message = isDbError
+      ? raw.includes("unique") || raw.includes("P2002")
+        ? "البريد الإلكتروني مستخدم مسبقاً"
+        : "لا يمكن الاتصال بقاعدة البيانات. شغّل: pnpm dev"
+      : process.env.NODE_ENV !== "production"
+        ? raw || "Unknown error"
+        : "Registration failed. Try again.";
+    return res.status(500).json({ error: message });
   }
 });
 
 authRouter.post("/login", async (req, res) => {
   try {
+    if (!req.body || typeof req.body !== "object") {
+      return res.status(400).json({ error: "Request body must be JSON with email and password" });
+    }
     const body = loginSchema.parse(req.body);
     const user = await prisma.user.findUnique({
       where: { email: body.email },
     });
     if (!user || !(await bcrypt.compare(body.password, user.passwordHash))) {
-      return res.status(401).json({ error: "Invalid credentials" });
+      return res.status(401).json({ error: "Invalid email or password" });
     }
     if (!user.isActive) {
-      return res.status(401).json({ error: "Account is deactivated" });
+      return res.status(401).json({ error: "Account is deactivated. Contact support." });
     }
     await prisma.user.update({
       where: { id: user.id },
@@ -95,8 +118,57 @@ authRouter.post("/login", async (req, res) => {
     if (e instanceof z.ZodError) {
       return res.status(400).json({ error: e.errors });
     }
-    throw e;
+    console.error("[auth/login]", e);
+    const raw = e && typeof e === "object" && "message" in e ? String((e as { message: string }).message) : String(e);
+    const isDbError = /P1001|P1017|connect|database|ECONNREFUSED/i.test(raw);
+    const message = isDbError
+      ? "لا يمكن الاتصال بقاعدة البيانات. تأكد من تشغيل: pnpm dev"
+      : process.env.NODE_ENV !== "production"
+        ? raw
+        : "Login failed. Try again.";
+    return res.status(500).json({ error: message });
   }
+});
+
+// First admin: only when zero admins exist; requires FIRST_ADMIN_SECRET in body (and in env)
+authRouter.post("/first-admin", async (req, res) => {
+  const { secret, email, password, name } = req.body || {};
+  const expectedSecret = process.env.FIRST_ADMIN_SECRET;
+  if (!expectedSecret || secret !== expectedSecret) {
+    return res.status(403).json({ error: "Invalid or missing first-admin secret" });
+  }
+  const adminCount = await prisma.user.count({ where: { role: "ADMIN" } });
+  if (adminCount > 0) {
+    return res.status(403).json({ error: "An admin already exists" });
+  }
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing) {
+    return res.status(400).json({ error: "Email already registered" });
+  }
+  if (!email || !password || !name || password.length < 8) {
+    return res.status(400).json({ error: "email, name, and password (min 8) required" });
+  }
+  const passwordHash = await bcrypt.hash(password, 12);
+  const user = await prisma.user.create({
+    data: {
+      email,
+      passwordHash,
+      name,
+      role: "ADMIN",
+    },
+    select: { id: true, email: true, name: true, role: true, avatar: true },
+  });
+  await prisma.userProfile.create({ data: { userId: user.id } });
+  const accessToken = generateAccessToken(user);
+  const refreshToken = generateRefreshToken(user.id);
+  await prisma.refreshToken.create({
+    data: {
+      token: refreshToken,
+      userId: user.id,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    },
+  });
+  res.status(201).json({ user, accessToken, refreshToken, expiresIn: 900 });
 });
 
 authRouter.post("/refresh", async (req, res) => {

@@ -55,7 +55,7 @@ pnpm dev
 ```
 
 - Frontend: http://localhost:3000
-- API + WebSocket: http://localhost:3001
+- API + WebSocket: http://localhost:3002
 
 ### Seed Accounts
 

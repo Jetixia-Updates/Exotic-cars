@@ -3,80 +3,114 @@ import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
-// Real high-quality images from Unsplash (free to use)
+// Real high-quality images from Unsplash — each module uses topic-related photos
 const IMAGES = {
+  // CARS — exotic/sports cars only
   cars: {
     lamborghini: [
-      "https://images.unsplash.com/photo-1544636331-e26879cd4d9b?w=1200",
-      "https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=1200",
-      "https://images.unsplash.com/photo-1544829099-b9a0c07fad1a?w=1200",
-      "https://images.unsplash.com/photo-1580273916550-e323be2ae537?w=1200",
+      "https://images.unsplash.com/photo-1544636331-e26879cd4d9b?w=1200", // orange sports car
+      "https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=1200", // black sports car
+      "https://images.unsplash.com/photo-1544829099-b9a0c07fad1a?w=1200",   // yellow sports car
+      "https://images.unsplash.com/photo-1580273916550-e323be2ae537?w=1200", // red sports car
+      "https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=1200", // white sports car
+      "https://images.unsplash.com/photo-1614162692292-7ac56d7f7f1e?w=1200", // blue supercar
     ],
     ferrari: [
-      "https://images.unsplash.com/photo-1583121274602-3e2820c69888?w=1200",
-      "https://images.unsplash.com/photo-1592198084033-aade902d1aae?w=1200",
-      "https://images.unsplash.com/photo-1555215695-3004980ad54e?w=1200",
-      "https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=1200",
+      "https://images.unsplash.com/photo-1583121274602-3e2820c69888?w=1200", // red Ferrari
+      "https://images.unsplash.com/photo-1592198084033-aade902d1aae?w=1200", // Ferrari rear
+      "https://images.unsplash.com/photo-1555215695-3004980ad54e?w=1200",   // red sports car
+      "https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=1200", // sports car
+      "https://images.unsplash.com/photo-1580273916550-e323be2ae537?w=1200", // red car
+      "https://images.unsplash.com/photo-1544636331-e26879cd4d9b?w=1200",   // sports car
     ],
     porsche: [
-      "https://images.unsplash.com/photo-1502877338535-766e1452684a?w=1200",
-      "https://images.unsplash.com/photo-1614162692292-7ac56d7f7f1e?w=1200",
-      "https://images.unsplash.com/photo-1606016159991-dfe4f2746ad5?w=1200",
-      "https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=1200",
+      "https://images.unsplash.com/photo-1502877338535-766e1452684a?w=1200", // Porsche/sports
+      "https://images.unsplash.com/photo-1614162692292-7ac56d7f7f1e?w=1200", // Porsche 911
+      "https://images.unsplash.com/photo-1606016159991-dfe4f2746ad5?w=1200", // sports car
+      "https://images.unsplash.com/photo-1618843479313-40f8afb4b4d8?w=1200", // car front
+      "https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=1200", // black car
+      "https://images.unsplash.com/photo-1553440569-bcc63803a83d?w=1200",   // car lineup
     ],
     mclaren: [
-      "https://images.unsplash.com/photo-1542362567-b07e54358753?w=1200",
-      "https://images.unsplash.com/photo-1553440569-bcc63803a83d?w=1200",
-      "https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?w=1200",
-      "https://images.unsplash.com/photo-1502877338535-766e1452684a?w=1200",
+      "https://images.unsplash.com/photo-1542362567-b07e54358753?w=1200",   // silver sports car
+      "https://images.unsplash.com/photo-1553440569-bcc63803a83d?w=1200",   // supercar
+      "https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?w=1200", // white sports car
+      "https://images.unsplash.com/photo-1502877338535-766e1452684a?w=1200", // sports car
+      "https://images.unsplash.com/photo-1580273916550-e323be2ae537?w=1200", // red supercar
+      "https://images.unsplash.com/photo-1614162692292-7ac56d7f7f1e?w=1200", // blue supercar
     ],
     bmw: [
-      "https://images.unsplash.com/photo-1555215695-3004980ad54e?w=1200",
-      "https://images.unsplash.com/photo-1619767886558-efdc259cde1a?w=1200",
-      "https://images.unsplash.com/photo-1618843479313-40f8afb4b4d8?w=1200",
-      "https://images.unsplash.com/photo-1553440569-bcc63803a83d?w=1200",
+      "https://images.unsplash.com/photo-1555215695-3004980ad54e?w=1200",   // sports sedan
+      "https://images.unsplash.com/photo-1619767886558-efdc259cde1a?w=1200", // BMW/car
+      "https://images.unsplash.com/photo-1618843479313-40f8afb4b4d8?w=1200", // car front
+      "https://images.unsplash.com/photo-1553440569-bcc63803a83d?w=1200",   // car
+      "https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=1200", // black car
+      "https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=1200", // sports car
     ],
   },
+  // PARTS — turbo/engine, exhaust, body, wheels, ECU (engine bay / mechanic)
   parts: {
     turbo: [
-      "https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?w=800",
-      "https://images.unsplash.com/photo-1625047509168-a7026f36de04?w=800",
-      "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800",
+      "https://images.unsplash.com/photo-1625047509168-a7026f36de04?w=800", // car engine
+      "https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?w=800", // auto service/engine
+      "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800",     // mechanic/engine
+      "https://images.unsplash.com/photo-1544636331-e26879cd4d9b?w=800",   // engine bay/sports car
+      "https://images.unsplash.com/photo-1580273916550-e323be2ae537?w=800", // car detail
+      "https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=800", // car/engine
     ],
     exhaust: [
-      "https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?w=800",
-      "https://images.unsplash.com/photo-1487754180451-c456f719a1fc?w=800",
-      "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800",
+      "https://images.unsplash.com/photo-1580273916550-e323be2ae537?w=800", // car rear/detail
+      "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800",   // mechanic/car
+      "https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?w=800", // car service
+      "https://images.unsplash.com/photo-1625047509168-a7026f36de04?w=800", // engine
+      "https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?w=800", // car rear
+      "https://images.unsplash.com/photo-1542362567-b07e54358753?w=800",   // car underside
     ],
     bodyKit: [
-      "https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=800",
-      "https://images.unsplash.com/photo-1544636331-e26879cd4d9b?w=800",
-      "https://images.unsplash.com/photo-1618843479313-40f8afb4b4d8?w=800",
+      "https://images.unsplash.com/photo-1544636331-e26879cd4d9b?w=800",   // sports car front
+      "https://images.unsplash.com/photo-1618843479313-40f8afb4b4d8?w=800", // car front
+      "https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=800", // car side
+      "https://images.unsplash.com/photo-1580273916550-e323be2ae537?w=800", // red car body
+      "https://images.unsplash.com/photo-1544829099-b9a0c07fad1a?w=800",   // car hood/body
+      "https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=800", // sports car
     ],
     wheels: [
-      "https://images.unsplash.com/photo-1619642751034-765dfdf7c58e?w=800",
-      "https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?w=800",
-      "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800",
+      "https://images.unsplash.com/photo-1619642751034-765dfdf7c58e?w=800", // tire/wheel
+      "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800",   // car/wheel
+      "https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?w=800", // service/wheels
+      "https://images.unsplash.com/photo-1617812692194-85d257726b6e?w=800", // car detail
+      "https://images.unsplash.com/photo-1502877338535-766e1452684a?w=800", // car wheel
+      "https://images.unsplash.com/photo-1542362567-b07e54358753?w=800",   // alloy wheel/car
     ],
     engine: [
-      "https://images.unsplash.com/photo-1625047509168-a7026f36de04?w=800",
-      "https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?w=800",
-      "https://images.unsplash.com/photo-1555215695-3004980ad54e?w=800",
+      "https://images.unsplash.com/photo-1625047509168-a7026f36de04?w=800", // engine
+      "https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?w=800", // engine bay/service
+      "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800",   // mechanic engine
+      "https://images.unsplash.com/photo-1581092160562-40d3e2c2e2a2?w=800", // mechanical
+      "https://images.unsplash.com/photo-1565680018434-b513d5e9b2c2?w=800", // engine
+      "https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?w=800", // ECU/mechanical
     ],
   },
+  // WORKSHOPS — garage, mechanic, lift, tools
   workshops: [
-    "https://images.unsplash.com/photo-1619642751034-765dfdf7c58e?w=800",
-    "https://images.unsplash.com/photo-1487754180451-c456f719a1fc?w=800",
-    "https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?w=800",
-    "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800",
+    "https://images.unsplash.com/photo-1619642751034-765dfdf7c58e?w=800", // garage/tire
+    "https://images.unsplash.com/photo-1487754180451-c456f719a1fc?w=800", // cars in garage
+    "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800",   // mechanic working
+    "https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?w=800", // car service
+    "https://images.unsplash.com/photo-1544636331-e26879cd4d9b?w=800",   // workshop/sports car
+    "https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?w=800", // cars garage
   ],
-  workshopLogo: "https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?w=400",
+  workshopLogo: "https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?w=400", // auto service
+  // EVENTS — car meets, lineups, track
   events: [
-    "https://images.unsplash.com/photo-1553440569-bcc63803a83d?w=1200",
-    "https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?w=1200",
-    "https://images.unsplash.com/photo-1502877338535-766e1452684a?w=1200",
+    "https://images.unsplash.com/photo-1553440569-bcc63803a83d?w=1200",   // car meet/lineup
+    "https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?w=1200", // cars together
+    "https://images.unsplash.com/photo-1502877338535-766e1452684a?w=1200", // sports car/track
+    "https://images.unsplash.com/photo-1542362567-b07e54358753?w=1200",   // car show
+    "https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=1200", // exotic car
+    "https://images.unsplash.com/photo-1583121274602-3e2820c69888?w=1200", // Ferrari/event
   ],
-  userAvatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200",
+  userAvatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200", // person
 };
 
 async function main() {

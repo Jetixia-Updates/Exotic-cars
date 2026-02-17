@@ -8,11 +8,12 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 
 export default function HomePage() {
-  const { data: featured } = useQuery({
+  const { data: featured, isError, error } = useQuery({
     queryKey: ["cars", "featured"],
     queryFn: () => api<{ id: string; title: string; brand: string; model: string; year: number; price: number | null; images: string[] }[]>("/api/cars/featured"),
     retry: false,
   });
+  const apiUnavailable = isError && (error?.message?.includes("unavailable") || error?.message?.includes("503"));
 
   const features = [
     { icon: Car, title: "Exotic Marketplace", desc: "Premium modified cars from around the globe", href: "/cars" },
@@ -69,6 +70,12 @@ export default function HomePage() {
         <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-exotic-black to-transparent" />
       </section>
 
+      {apiUnavailable && (
+        <section className="sticky top-0 z-50 bg-exotic-neon-pink/90 text-exotic-black px-4 py-3 text-center text-sm font-medium">
+          API غير مشغّل. من جذر المشروع شغّل: <code className="bg-black/20 px-2 py-0.5 rounded">pnpm dev</code> (يشغّل الواجهة + السيرفر معاً).
+        </section>
+      )}
+
       {/* Features */}
       <section className="py-24 bg-exotic-carbon">
         <div className="container mx-auto px-4">
@@ -80,7 +87,7 @@ export default function HomePage() {
           >
             Everything You Need
           </motion.h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-8">
             {features.map((f, i) => (
               <motion.div
                 key={f.href}
@@ -90,12 +97,12 @@ export default function HomePage() {
                 transition={{ delay: i * 0.1 }}
               >
                 <Link href={f.href} className="block">
-                  <div className="glass-card-hover p-8 h-full group">
-                    <f.icon className="h-12 w-12 text-exotic-gold mb-4 group-hover:scale-110 transition" />
-                    <h3 className="font-display text-xl font-semibold text-exotic-gold mb-2">
+                  <div className="glass-card-hover p-4 md:p-8 h-full group">
+                    <f.icon className="h-10 w-10 md:h-12 md:w-12 text-exotic-gold mb-2 md:mb-4 group-hover:scale-110 transition" />
+                    <h3 className="font-display text-base md:text-xl font-semibold text-exotic-gold mb-1 md:mb-2">
                       {f.title}
                     </h3>
-                    <p className="text-white/60">{f.desc}</p>
+                    <p className="text-white/60 text-sm md:text-base">{f.desc}</p>
                   </div>
                 </Link>
               </motion.div>
@@ -120,6 +127,11 @@ export default function HomePage() {
               <Button variant="outline">View All</Button>
             </Link>
           </div>
+          {apiUnavailable && (
+            <p className="text-white/60 text-center py-8">
+              سيظهر قسم السيارات المميزة بعد تشغيل السيرفر (<code className="text-exotic-gold">pnpm dev</code>).
+            </p>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             {(featured || []).slice(0, 4).map((car, i) => (
               <motion.div

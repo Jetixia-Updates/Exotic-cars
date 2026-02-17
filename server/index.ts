@@ -17,6 +17,7 @@ import { cartRouter } from "./routes/cart";
 import { ordersRouter } from "./routes/orders";
 import { adminRouter } from "./routes/admin";
 import { setupAuctionWebSocket } from "./ws/auction";
+import { prisma } from "./lib/prisma";
 
 const app = express();
 const httpServer = createServer(app);
@@ -32,7 +33,9 @@ const io = new Server(httpServer, {
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:3000",
+    origin: process.env.FRONTEND_URL
+      ? process.env.FRONTEND_URL.split(",")
+      : ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:3003"],
     credentials: true,
   })
 );
@@ -45,8 +48,16 @@ const limiter = rateLimit({
 });
 app.use("/api", limiter);
 
-// Health
-app.get("/api/health", (_, res) => res.json({ status: "ok" }));
+// Health (includes DB check)
+app.get("/api/health", async (_, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: "ok", database: "connected" });
+  } catch (e) {
+    console.error("[health] DB", e);
+    res.status(503).json({ status: "error", database: "disconnected", error: String((e as Error).message) });
+  }
+});
 
 // API Routes
 app.use("/api/auth", authRouter);
@@ -64,7 +75,17 @@ app.use("/api/admin", adminRouter);
 // WebSocket
 setupAuctionWebSocket(io);
 
-const PORT = process.env.API_PORT || 3001;
+// معالج أخطاء عام — يلتقط أي خطأ غير مُعالَج ويُرجع JSON
+app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error("[API unhandled]", err);
+  if (!res.headersSent) {
+    res.status(500).json({
+      error: process.env.NODE_ENV !== "production" ? String(err.message) : "Internal Server Error",
+    });
+  }
+});
+
+const PORT = process.env.API_PORT || 3002;
 httpServer.listen(PORT, () => {
   console.log(`🚀 Exotic Cars API + WebSocket running on port ${PORT}`);
 });

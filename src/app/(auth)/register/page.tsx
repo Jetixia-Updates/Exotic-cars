@@ -35,7 +35,13 @@ export default function RegisterPage() {
       setAuth(res.user as Parameters<typeof setAuth>[0], res.accessToken, res.refreshToken);
       router.push("/dashboard");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Registration failed");
+      const message = err instanceof Error ? err.message : "Registration failed";
+      const status = err && typeof err === "object" && "status" in err ? (err as { status: number }).status : undefined;
+      if (status === 503 || message.toLowerCase().includes("unavailable")) {
+        setError("سيرفر Exotic Cars غير مشغّل. من جذر المشروع شغّل: pnpm dev");
+        return;
+      }
+      setError(message);
     } finally {
       setLoading(false);
     }

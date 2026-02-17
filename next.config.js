@@ -21,8 +21,8 @@ const nextConfig = {
   },
   async rewrites() {
     return [
-      { source: "/api/ws", destination: "http://localhost:3001" },
-      { source: "/api/:path*", destination: "http://localhost:3001/api/:path*" },
+      { source: "/api/ws", destination: "http://localhost:3002" },
+      { source: "/api/:path*", destination: "http://localhost:3002/api/:path*" },
     ];
   },
 };

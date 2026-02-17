@@ -3,7 +3,9 @@ import { authenticate, AuthRequest } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
 import Stripe from "stripe";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", { apiVersion: "2024-11-20.acacia" });
+const stripe = process.env.STRIPE_SECRET_KEY
+  ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2024-11-20.acacia" })
+  : null;
 
 export const ordersRouter = Router();
 
@@ -17,6 +19,9 @@ ordersRouter.get("/", authenticate, async (req: AuthRequest, res) => {
 });
 
 ordersRouter.post("/create-payment-intent", authenticate, async (req: AuthRequest, res) => {
+  if (!stripe) {
+    return res.status(503).json({ error: "Payments not configured (STRIPE_SECRET_KEY)" });
+  }
   const { cartItemIds } = req.body;
   const where: { userId: string; id?: { in: string[] } } = { userId: req.user!.userId };
   if (cartItemIds?.length) where.id = { in: cartItemIds };

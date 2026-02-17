@@ -1,6 +1,7 @@
 import { Server, Socket } from "socket.io";
 import jwt from "jsonwebtoken";
 import { prisma } from "../lib/prisma";
+import { getExtendedEndTime } from "../lib/auction-utils";
 
 interface AuthPayload {
   userId: string;
@@ -29,12 +30,13 @@ export function setupAuctionWebSocket(io: Server) {
 
   auctionNs.on("connection", (socket: Socket) => {
     socket.on("join:auction", async (auctionId: string) => {
+      if (!auctionId) return;
       socket.join(`auction:${auctionId}`);
       const auction = await prisma.auction.findUnique({
         where: { id: auctionId },
         include: {
           carListing: true,
-          bids: { take: 20, orderBy: { createdAt: "desc" } },
+          bids: { take: 30, orderBy: { createdAt: "desc" }, include: { user: { select: { id: true, name: true } } } },
         },
       });
       if (auction) {
@@ -58,9 +60,20 @@ export function setupAuctionWebSocket(io: Server) {
       const auction = await prisma.auction.findUnique({
         where: { id: auctionId },
       });
-      if (!auction || auction.status !== "LIVE") return;
-      if (amount <= auction.currentPrice) return;
+      if (!auction || auction.status !== "LIVE") {
+        socket.emit("error", { message: "Auction is not live" });
+        return;
+      }
+      if (new Date() > auction.endTime) {
+        socket.emit("error", { message: "Auction has ended" });
+        return;
+      }
+      if (amount <= auction.currentPrice) {
+        socket.emit("error", { message: "Bid must be higher than current price" });
+        return;
+      }
 
+      const newEndTime = getExtendedEndTime(auction.endTime, auction.extendMinutes);
       const bid = await prisma.bid.create({
         data: {
           auctionId,
@@ -75,15 +88,17 @@ export function setupAuctionWebSocket(io: Server) {
           currentPrice: amount,
           currentBidderId: user.userId,
           bidCount: { increment: 1 },
+          endTime: newEndTime,
         },
         include: {
           carListing: true,
-          bids: { take: 5, orderBy: { createdAt: "desc" } },
+          bids: { take: 30, orderBy: { createdAt: "desc" }, include: { user: { select: { id: true, name: true } } } },
         },
       });
 
+      const bidWithUser = { ...bid, user: { id: user.userId, name: (await prisma.user.findUnique({ where: { id: user.userId }, select: { name: true } }))?.name } };
       auctionNs.to(`auction:${auctionId}`).emit("bid:new", {
-        bid: { ...bid, user: { id: user.userId } },
+        bid: bidWithUser,
         auction: updated,
       });
     });
