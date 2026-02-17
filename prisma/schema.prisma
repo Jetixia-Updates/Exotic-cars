@@ -1,0 +1,493 @@
+// Exotic Cars - Enterprise Database Schema
+// Neon PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ============ ENUMS ============
+
+enum UserRole {
+  BUYER
+  SELLER
+  WORKSHOP
+  ADMIN
+}
+
+enum ListingType {
+  FIXED_PRICE
+  AUCTION
+}
+
+enum ModificationLevel {
+  STOCK
+  STAGE1
+  STAGE2
+  STAGE3
+  CUSTOM
+}
+
+enum PartCategory {
+  ENGINES
+  TURBO_KITS
+  EXHAUST_SYSTEMS
+  BODY_KITS
+  WHEELS_TIRES
+  ELECTRONICS_ECU
+  SUSPENSION
+  BRAKES
+  INTERIOR
+  OTHER
+}
+
+enum PartCondition {
+  NEW
+  USED
+  REFURBISHED
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum AuctionStatus {
+  SCHEDULED
+  LIVE
+  ENDED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  ONGOING
+  COMPLETED
+  CANCELLED
+}
+
+// ============ USER & AUTH ============
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String    @map("password_hash")
+  name          String
+  avatar        String?
+  phone         String?
+  role          UserRole  @default(BUYER)
+  locale        String    @default("en")
+  currency      String    @default("USD")
+  isVerified    Boolean   @default(false) @map("is_verified")
+  isActive      Boolean   @default(true) @map("is_active")
+  lastLoginAt   DateTime? @map("last_login_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  refreshTokens   RefreshToken[]
+  profile         UserProfile?
+  garage          Garage[]
+  listings        CarListing[]
+  bids            Bid[]
+  partsListings   PartListing[]
+  workshopProfile Workshop?
+  bookings        Booking[]
+  reviewsGiven    Review[]    @relation("ReviewsGiven")
+  reviewsReceived Review[]    @relation("ReviewsReceived")
+  followers       Follow[]    @relation("Following")
+  following       Follow[]    @relation("Followers")
+  eventAttendances EventAttendance[]
+  messagesSent    Message[]   @relation("SentMessages")
+  messagesReceived Message[]  @relation("ReceivedMessages")
+  notifications   Notification[]
+  cartItems       CartItem[]
+  orders          Order[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String   @map("user_id")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+model UserProfile {
+  id          String   @id @default(cuid())
+  userId      String   @unique @map("user_id")
+  bio         String?
+  country     String?
+  city        String?
+  lat         Float?
+  lng         Float?
+  rating      Float    @default(0)
+  reviewCount Int      @default(0) @map("review_count")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profiles")
+}
+
+model Follow {
+  id         String   @id @default(cuid())
+  followerId String   @map("follower_id")
+  followingId String  @map("following_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  follower  User @relation("Followers", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@map("follows")
+}
+
+// ============ GARAGE & CARS ============
+
+model Garage {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  name      String
+  carId     String?  @map("car_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  car  CarListing? @relation(fields: [carId], references: [id])
+
+  @@map("garages")
+}
+
+model CarListing {
+  id               String           @id @default(cuid())
+  sellerId         String           @map("seller_id")
+  title            String
+  description      String
+  brand            String
+  model            String
+  year             Int
+  price            Float?
+  listingType      ListingType      @default(FIXED_PRICE) @map("listing_type")
+  modificationLevel ModificationLevel @map("modification_level")
+  horsepower       Int              @map("horsepower")
+  engine           String?
+  torque           Int?
+  transmission     String?
+  driveType        String?          @map("drive_type")
+  mileage          Int?
+  location         String?
+  country          String?
+  city             String?
+  lat              Float?
+  lng              Float?
+  images           String[]         @default([])
+  videos           String[]         @default([])
+  modifications    Json?            // Array of modification items
+  specs            Json?            // Full specs object
+  isFeatured       Boolean          @default(false) @map("is_featured")
+  status           String           @default("active") // active, sold, reserved
+  viewCount        Int              @default(0) @map("view_count")
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+
+  seller  User      @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  auction Auction?
+  garage  Garage[]
+
+  @@map("car_listings")
+}
+
+// ============ AUCTIONS ============
+
+model Auction {
+  id              String        @id @default(cuid())
+  carListingId    String        @unique @map("car_listing_id")
+  startPrice      Float         @map("start_price")
+  reservePrice    Float?        @map("reserve_price")
+  currentPrice    Float         @map("current_price")
+  currentBidderId String?       @map("current_bidder_id")
+  bidCount        Int           @default(0) @map("bid_count")
+  startTime       DateTime      @map("start_time")
+  endTime         DateTime      @map("end_time")
+  extendMinutes   Int           @default(5) @map("extend_minutes") // Anti-sniping
+  status          AuctionStatus @default(SCHEDULED)
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  carListing CarListing @relation(fields: [carListingId], references: [id], onDelete: Cascade)
+  bids       Bid[]
+}
+
+model Bid {
+  id         String   @id @default(cuid())
+  auctionId  String   @map("auction_id")
+  userId     String   @map("user_id")
+  amount     Float
+  isAutoBid  Boolean  @default(false) @map("is_auto_bid")
+  maxAmount  Float?   @map("max_amount") // For auto-bid
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  auction Auction @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("bids")
+}
+
+// ============ SPARE PARTS ============
+
+model PartListing {
+  id           String        @id @default(cuid())
+  sellerId     String        @map("seller_id")
+  title        String
+  description  String
+  category     PartCategory
+  condition    PartCondition
+  price        Float
+  currency     String        @default("USD")
+  images       String[]      @default([])
+  compatibility Json?        // Car models/brands this part fits
+  brand        String?
+  partNumber   String?       @map("part_number")
+  location     String?
+  country      String?
+  status       String        @default("active")
+  viewCount    Int           @default(0) @map("view_count")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+
+  seller     User       @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+}
+
+// ============ WORKSHOPS ============
+
+model Workshop {
+  id          String   @id @default(cuid())
+  userId      String   @unique @map("user_id")
+  name        String
+  description String
+  logo        String?
+  images      String[] @default([])
+  address     String
+  city        String
+  country     String
+  lat         Float?
+  lng         Float?
+  phone       String?
+  email       String
+  website     String?
+  services    String[] @default([]) // dyno, ecu, wrapping, body_kit, etc.
+  rating      Float    @default(0)
+  reviewCount Int      @default(0) @map("review_count")
+  isVerified  Boolean  @default(false) @map("is_verified")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookings Booking[]
+  reviews  Review[]  @relation("WorkshopReviews")
+  slots    WorkshopSlot[]
+}
+
+model WorkshopSlot {
+  id          String   @id @default(cuid())
+  workshopId  String   @map("workshop_id")
+  date        DateTime
+  startTime   String   @map("start_time")
+  endTime     String   @map("end_time")
+  isAvailable Boolean  @default(true) @map("is_available")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  workshop Workshop @relation(fields: [workshopId], references: [id], onDelete: Cascade)
+  bookings Booking[]
+
+  @@map("workshop_slots")
+}
+
+model Booking {
+  id          String        @id @default(cuid())
+  userId      String        @map("user_id")
+  workshopId  String        @map("workshop_id")
+  slotId      String?       @map("slot_id")
+  service     String
+  description String?
+  carInfo     String?
+  status      BookingStatus @default(PENDING)
+  totalAmount Float?        @map("total_amount")
+  paidAt      DateTime?     @map("paid_at")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workshop Workshop     @relation(fields: [workshopId], references: [id], onDelete: Cascade)
+  slot    WorkshopSlot? @relation(fields: [slotId], references: [id])
+}
+
+// ============ REVIEWS ============
+
+model Review {
+  id          String    @id @default(cuid())
+  reviewerId  String    @map("reviewer_id")
+  targetUserId String?  @map("target_user_id")
+  workshopId  String?   @map("workshop_id")
+  rating      Int       // 1-5
+  comment     String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  reviewer      User      @relation("ReviewsGiven", fields: [reviewerId], references: [id], onDelete: Cascade)
+  targetUser    User?     @relation("ReviewsReceived", fields: [targetUserId], references: [id], onDelete: Cascade)
+  workshop      Workshop? @relation("WorkshopReviews", fields: [workshopId], references: [id], onDelete: Cascade)
+}
+
+// ============ COMMUNITY & EVENTS ============
+
+model Event {
+  id          String      @id @default(cuid())
+  title       String
+  description String
+  coverImage  String?     @map("cover_image")
+  location    String
+  city        String
+  country     String
+  lat         Float?
+  lng         Float?
+  startTime   DateTime    @map("start_time")
+  endTime     DateTime    @map("end_time")
+  maxAttendees Int?       @map("max_attendees")
+  status      EventStatus @default(DRAFT)
+  creatorId   String?     @map("creator_id")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  attendances EventAttendance[]
+  photos      EventPhoto[]
+}
+
+model EventAttendance {
+  id        String   @id @default(cuid())
+  eventId   String   @map("event_id")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@map("event_attendances")
+}
+
+model EventPhoto {
+  id        String   @id @default(cuid())
+  eventId   String   @map("event_id")
+  url       String
+  caption   String?
+  uploaderId String? @map("uploader_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@map("event_photos")
+}
+
+// ============ MESSAGING ============
+
+model Message {
+  id        String   @id @default(cuid())
+  senderId  String   @map("sender_id")
+  receiverId String  @map("receiver_id")
+  content   String
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  sender   User @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+}
+
+// ============ NOTIFICATIONS ============
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  title     String
+  body      String?
+  type      String   // bid, auction, message, booking, etc.
+  data      Json?
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+// ============ CART & ORDERS ============
+
+model CartItem {
+  id            String   @id @default(cuid())
+  userId        String   @map("user_id")
+  partListingId String   @map("part_listing_id")
+  quantity      Int      @default(1)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  user  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  part  PartListing @relation(fields: [partListingId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, partListingId])
+  @@map("cart_items")
+}
+
+model Order {
+  id            String        @id @default(cuid())
+  userId        String        @map("user_id")
+  totalAmount   Float         @map("total_amount")
+  currency      String        @default("USD")
+  status        String        @default("pending") // pending, paid, shipped, delivered
+  paymentIntentId String?     @map("payment_intent_id")
+  stripePaymentId String?     @map("stripe_payment_id")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items OrderItem[]
+}
+
+model OrderItem {
+  id            String   @id @default(cuid())
+  orderId       String   @map("order_id")
+  partListingId String   @map("part_listing_id")
+  quantity      Int      @default(1)
+  price         Float
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  order Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  part  PartListing @relation(fields: [partListingId], references: [id], onDelete: Cascade)
+
+  @@map("order_items")
+}

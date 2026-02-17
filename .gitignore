@@ -1,0 +1,41 @@
+# Dependencies
+node_modules
+.pnpm-store
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Next.js
+.next
+out
+
+# Build
+dist
+build
+
+# Prisma
+prisma/migrations
+
+# Debug
+*.log
+npm-debug.log*
+.pnpm-debug.log*
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Vercel
+.vercel
+
+# Testing
+coverage
+.nyc_output

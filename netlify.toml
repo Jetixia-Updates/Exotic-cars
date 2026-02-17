@@ -1,0 +1,20 @@
+# Exotic Cars - Netlify Deployment
+# Frontend: Deploy Next.js via Netlify
+# Backend: Deploy server/ to Render/Railway (WebSocket requires persistent process)
+
+[build]
+  command = "pnpm build:web"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "20"
+  NPM_FLAGS = "--legacy-peer-deps"
+
+# Next.js plugin handles routing
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+[context.production.environment]
+  NEXT_PUBLIC_APP_URL = "https://exotic-cars.netlify.app"
+  NEXT_PUBLIC_API_URL = "https://your-api.onrender.com"
+  NEXT_PUBLIC_WS_URL = "wss://your-api.onrender.com"
