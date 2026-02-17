@@ -3,7 +3,7 @@
 # Backend: Deploy server/ to Render/Railway (WebSocket requires persistent process)
 
 [build]
-  command = "pnpm build:web"
+  command = "pnpm prisma generate && pnpm build:web"
   publish = ".next"
 
 [build.environment]
